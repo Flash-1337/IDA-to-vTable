@@ -6,54 +6,55 @@ namespace IDA_to_vTable
     internal class Function
     {
 
-        public Function(string _class, string _name, string _params)
+        public Function(string _class, string _name, string _args)
         {
-            Name = _name;
             Class = _class;
-            Params = _params;
+            Name = _name;
+            Args = _args;
+            ReturnType = "virtual int";
+        }
+
+        public Function(string _class, string _name, string _args, string _return)
+        {
+            Class = _class;
+            Name = _name;
+            Args = _args;
+            ReturnType = _return;
         }
 
         public string Name { get; set; }
         public string Class { get; set; }
-        public string Params { get; set; }
-    }
-
-    public class FunctionObject
-    {
-        public string ReturnType { get; set; }
-        public string Name { get; set; }
         public string Args { get; set; }
+        public string ReturnType { get; set; }
     }
-
+    
     internal class Program
     {
 
         static Function ParseFunctionString(string input)
         {
             // Use a regular expression to extract the class name, method name, and parameters
-            var regex = new Regex(@"; (?<class>\w+)::(?<method>\w+)\((?<params>[^)]*)\)");
-            var match = regex.Match(input);
+            Regex regex = new (@"; (?<class>\w+)::(?<method>\w+)\((?<params>[^)]*)\)");
+            Match match = regex.Match(input);
 
             // Extract the class name, method name, and parameters from the regex match
-            var className = match.Groups["class"].Value;
-            var methodName = match.Groups["method"].Value;
-            var methodParams = match.Groups["params"].Value;
+            string className = match.Groups["class"].Value;
+            string methodName = match.Groups["method"].Value;
+            string methodParams = match.Groups["params"].Value;
 
             return new Function(className, methodName, methodParams);
         }
 
-        static FunctionObject ConvertToObject(string input)
+        static Function ConvertToObject(string input)
         {
-            Regex regex = new Regex(@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
+            Regex regex = new (@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
             Match match = regex.Match(input);
             if (match.Success)
             {
-                FunctionObject obj = new FunctionObject
-                {
-                    ReturnType = match.Groups["returnType"].Value,
-                    Name = match.Groups["name"].Value,
-                    Args = match.Groups["args"].Value
-                };
+                Function obj = new("class",
+                    match.Groups["name"].Value, 
+                    match.Groups["args"].Value, 
+                    match.Groups["returnType"].Value);    
                 return obj;
             }
             return null;
@@ -61,7 +62,7 @@ namespace IDA_to_vTable
 
         static bool IsValidFunc(string input)
         {
-            Regex regex = new Regex(@"^\s*\.rodata:[0-9A-F]+\s+((dq\s+offset\s+)?[_A-Z0-9]+\d+\w*\s*)?;\s*\w+::\w+\([^)]*\)?$");
+            Regex regex = new(@"^\s*\.rodata:[0-9A-F]+\s+((dq\s+offset\s+)?[_A-Z0-9]+\d+\w*\s*)?;\s*\w+::\w+\([^)]*\)?$");
             return regex.IsMatch(input);
         }
 
@@ -79,7 +80,7 @@ namespace IDA_to_vTable
 
         static Function ParseString(string input, int index)
         {
-            if (input.Contains("~") && input.Contains("dq offset")) // Constructor
+            if (input.Contains('~') && input.Contains("dq offset")) // Constructor
                 return ParseConstructorString(input);
 
             if (input.Contains("___cxa_pure_virtual")) // Pure virtual function
@@ -132,7 +133,7 @@ namespace IDA_to_vTable
             }
             List<string> functionNames = new();
             List<string> functionIndexes = new();
-            List<FunctionObject> functionList1 = new();
+            List<Function> functionList1 = new();
 
 
 
@@ -156,14 +157,9 @@ namespace IDA_to_vTable
                     // Guess the return type
                     var returnType = GuessReturnType(function.Name);
 
-                    functionObjs.Add(new FunctionObject
-                    {
-                        ReturnType = returnType,
-                        Name = function.Name,
-                        Args = function.Params
-                    });
+                    functionList1.Add(new Function("class", function.Name, function.Args, returnType));
 
-                    functionNames.Add($"{returnType} {function.Name}({function.Params});");
+                    functionNames.Add($"{returnType} {function.Name}({function.Args});");
                     functionIndexes.Add($"int {function.Name} = {index};");
                 }
 
@@ -180,39 +176,17 @@ namespace IDA_to_vTable
 
             foreach (string line in functionIndexes)
             {
-                Console.WriteLine(line);
+                if (!line.Contains('~'))
+                    Console.WriteLine(line);
             }
 
+            Console.WriteLine("Enter file name");
+            string path = Environment.CurrentDirectory + @"\" + Console.ReadLine();
+            System.IO.File.WriteAllLines(path + "vtables.txt", functionNames);
+            System.IO.File.WriteAllLines(path + "indexs.txt", functionIndexes);
 
-            Console.WriteLine("Input old vtable");
-
-            string[] lines2;
-
-            try
-            {
-                lines2 = System.IO.File.ReadAllLines(Console.ReadLine());
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("The file could not be read:");
-                Console.WriteLine(e.Message);
-                Console.ReadLine();
-                return;
-            }
-
-            List<FunctionObject> functionList2 = new();
-
-            // Read all lines
-            foreach (string line in lines2)
-            {
-                // Turn the input from IDA into a Function object
-                var function = ConvertToObject(line);
-
-                if (function == null) continue;
-
-                functionList2.Add(function);
-            }
-
+            Console.WriteLine("Saved");
+            Console.ReadKey();
         }
     }
 }
