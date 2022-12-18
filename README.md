@@ -1,7 +1,7 @@
 # IDA-to-vTable
 
 ## Description 
-### A simple tool to convert an ida vtable to a usable virtual function table 
+### A simple tool to convert a IDA vtables to a usable virtual function table 
 
 
 ## Code Breakdown (Thanks to ChatGPT)
