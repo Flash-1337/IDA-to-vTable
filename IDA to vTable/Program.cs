@@ -1,5 +1,6 @@
 ﻿using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace IDA_to_vTable
 {
@@ -26,6 +27,8 @@ namespace IDA_to_vTable
         public string Class { get; set; }
         public string Args { get; set; }
         public string ReturnType { get; set; }
+
+        public bool wasChanged { get; set; }
     }
     
     internal class Program
@@ -45,16 +48,16 @@ namespace IDA_to_vTable
             return new Function(className, methodName, methodParams);
         }
 
-        static Function ConvertToObject(string input)
+        static Function ConvertToFunction(string input)
         {
-            Regex regex = new (@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
+            Regex regex = new(@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
             Match match = regex.Match(input);
             if (match.Success)
             {
                 Function obj = new("class",
-                    match.Groups["name"].Value, 
-                    match.Groups["args"].Value, 
-                    match.Groups["returnType"].Value);    
+                    match.Groups["name"].Value,
+                    match.Groups["args"].Value,
+                    match.Groups["returnType"].Value);
                 return obj;
             }
             return null;
@@ -66,13 +69,20 @@ namespace IDA_to_vTable
             return regex.IsMatch(input);
         }
 
-        static Function ParseConstructorString(string input)
+        static bool alreadyFoundDestructor = false;
+
+        static Function ParseDestructorString(string input)
         {
+            if (alreadyFoundDestructor)
+                return null;
+
             // Player::~Player()
             var regex = new Regex(@"; (?<class>\w+)::~(?<classC>\w+)");
             var match = regex.Match(input);
             
             var className = match.Groups["class"].Value;
+
+            alreadyFoundDestructor = true;
 
             return new Function(className, "~" + className, "");
         }
@@ -80,8 +90,8 @@ namespace IDA_to_vTable
 
         static Function ParseString(string input, int index)
         {
-            if (input.Contains('~') && input.Contains("dq offset")) // Constructor
-                return ParseConstructorString(input);
+            if (input.Contains('~') && input.Contains("dq offset")) // Destructor
+                return ParseDestructorString(input);
 
             if (input.Contains("___cxa_pure_virtual")) // Pure virtual function
                 return new Function("Class", "Function" + index, "");
@@ -104,7 +114,7 @@ namespace IDA_to_vTable
                 return "virtual bool";
             }
             
-            // If the function name does not match any of the above patterns, it is likely to return void
+            // If the function name does not match any of the above patterns, it is likely to be a normal void
             return "virtual int";
         }
 
@@ -148,19 +158,14 @@ namespace IDA_to_vTable
 
                 // Check if the line was a valid function
                 if (function == null)
-                {
-                    
                     shouldIncrementIndex = false;
-                }
                 else
                 {
                     // Guess the return type
                     var returnType = GuessReturnType(function.Name);
 
                     functionList1.Add(new Function("class", function.Name, function.Args, returnType));
-
-                    functionNames.Add($"{returnType} {function.Name}({function.Args});");
-                    functionIndexes.Add($"int {function.Name} = {index};");
+                    
                 }
 
                 if (shouldIncrementIndex)
@@ -168,22 +173,87 @@ namespace IDA_to_vTable
             }
 
 
-            foreach (string line in functionNames)
+
+
+            Console.WriteLine("Would you like to merge with a pre-existing vtable? (Experimental - This may not work correctly/at all) y/n");
+
+            if (Console.ReadLine().ToLower().Contains("y"))
             {
-                Console.WriteLine(line);
+
+                Console.WriteLine("Input path to old table");
+
+                string oldVtablePath = Console.ReadLine();
+
+                // interepret the vtable from the input file
+
+                if (!File.Exists(oldVtablePath))
+                {
+                    Console.WriteLine("File does not exist");
+                    Console.ReadLine();
+                    return;
+                }
+
+                string[] oldVtableStr = File.ReadAllLines(oldVtablePath);
+
+                List<Function> oldvTableFunctions = new();
+
+                foreach (string line in oldVtableStr)
+                {
+                    oldvTableFunctions.Add(ConvertToFunction(line));
+                }
+
+                foreach (Function newFunc in functionList1)
+                {
+                    foreach (Function oldFunc in oldvTableFunctions)
+                    {
+                        if (newFunc == null || oldFunc == null || newFunc.wasChanged || oldFunc.wasChanged)
+                            continue;
+
+                        if (newFunc.Name == oldFunc.Name)
+                        {
+                            if (newFunc.Args != oldFunc.Args)
+                                newFunc.Args = oldFunc.Args;
+
+                            if (newFunc.ReturnType != oldFunc.ReturnType)
+                                newFunc.ReturnType = oldFunc.ReturnType;
+
+
+                            newFunc.wasChanged = true;
+                            oldFunc.wasChanged = true;
+
+                            continue;
+                        }
+
+                        
+                    }
+                }
+            }
+
+            int newIndex = 1;
+
+            Function lastFunction = null;
+
+            foreach (Function func in functionList1)
+            {
+
+                functionNames.Add($"{func.ReturnType} {func.Name}({func.Args});");
+                
+                if (lastFunction != null && lastFunction.Name != func.Name && !func.Name.Contains("~"))
+                    functionIndexes.Add($"void {func.Name} = {newIndex};");
+
+
+                if (!func.Name.Contains("~"))
+                    newIndex++;
+
+                lastFunction = func;
             }
 
 
-            foreach (string line in functionIndexes)
-            {
-                if (!line.Contains('~'))
-                    Console.WriteLine(line);
-            }
 
             Console.WriteLine("Enter file name");
             string path = Environment.CurrentDirectory + @"\" + Console.ReadLine();
-            System.IO.File.WriteAllLines(path + "vtables.txt", functionNames);
-            System.IO.File.WriteAllLines(path + "indexs.txt", functionIndexes);
+            System.IO.File.WriteAllLines(path + "_vtables.txt", functionNames);
+            System.IO.File.WriteAllLines(path + "_indexs.txt", functionIndexes);
 
             Console.WriteLine("Saved");
             Console.ReadKey();
