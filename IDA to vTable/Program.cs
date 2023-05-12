@@ -1,262 +1,309 @@
-﻿using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
-using static System.Runtime.InteropServices.JavaScript.JSType;
+﻿using System.Text.RegularExpressions;
+using static System.Boolean;
 
-namespace IDA_to_vTable
+namespace IDA_to_vTable;
+
+internal static class Program
 {
-    internal class Function
+    private static readonly Regex ParseFunctionStringRegex = new(@"; (?<class>\w+)::(?<method>\w+)\((?<params>[^)]*)\)");
+    private static readonly Regex ConvertToFunctionRegex = new(@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
+    private static readonly Regex IsValidFunctionRegex = new(@"^\s*\.rodata:[0-9A-F]+\s+((dq\s+offset\s+)?[_A-Z0-9]+\d+\w*\s*)?;\s*\w+::\w+\([^)]*\)?$");
+    private static readonly Regex ParseDestructorStringRegex = new(@"; (?<class>\w+)::~(?<classC>\w+)");
+
+    private static Function? ParseFunctionString(string input)
     {
+        // Use a regular expression to extract the class name, method name, and parameters
+        Match match = ParseFunctionStringRegex.Match(input);
 
-        public Function(string _class, string _name, string _args)
-        {
-            Class = _class;
-            Name = _name;
-            Args = _args;
-            ReturnType = "virtual int";
-        }
+        // Extract the class name, method name, and parameters from the regex match
+        string className = match.Groups["class"].Value;
+        string methodName = match.Groups["method"].Value;
+        string methodParams = match.Groups["params"].Value;
 
-        public Function(string _class, string _name, string _args, string _return)
-        {
-            Class = _class;
-            Name = _name;
-            Args = _args;
-            ReturnType = _return;
-        }
-
-        public string Name { get; set; }
-        public string Class { get; set; }
-        public string Args { get; set; }
-        public string ReturnType { get; set; }
-
-        public bool wasChanged { get; set; }
+        return new(className, methodName, methodParams);
     }
-    
-    internal class Program
+
+    private static Function? ConvertToFunction(string input)
     {
+        Match match = ConvertToFunctionRegex.Match(input);
+        
+        if (!match.Success) return null;
+        
+        Function obj = new("class",
+            match.Groups["name"].Value,
+            match.Groups["args"].Value,
+            match.Groups["returnType"].Value);
+        return obj;
+    }
 
-        static Function ParseFunctionString(string input)
-        {
-            // Use a regular expression to extract the class name, method name, and parameters
-            Regex regex = new (@"; (?<class>\w+)::(?<method>\w+)\((?<params>[^)]*)\)");
-            Match match = regex.Match(input);
+    private static bool IsValidFunc(string input)
+    {
+        return IsValidFunctionRegex.IsMatch(input);
+    }
 
-            // Extract the class name, method name, and parameters from the regex match
-            string className = match.Groups["class"].Value;
-            string methodName = match.Groups["method"].Value;
-            string methodParams = match.Groups["params"].Value;
+    private static bool _alreadyFoundDestructor;
 
-            return new Function(className, methodName, methodParams);
-        }
-
-        static Function ConvertToFunction(string input)
-        {
-            Regex regex = new(@"^\s*(?<returnType>virtual\s+[\w\s]+\*?)\s+(?<name>\w+)\s*\((?<args>[^)]*)\)");
-            Match match = regex.Match(input);
-            if (match.Success)
-            {
-                Function obj = new("class",
-                    match.Groups["name"].Value,
-                    match.Groups["args"].Value,
-                    match.Groups["returnType"].Value);
-                return obj;
-            }
+    private static Function? ParseDestructorString(string input)
+    {
+        if (_alreadyFoundDestructor)
             return null;
-        }
 
-        static bool IsValidFunc(string input)
-        {
-            Regex regex = new(@"^\s*\.rodata:[0-9A-F]+\s+((dq\s+offset\s+)?[_A-Z0-9]+\d+\w*\s*)?;\s*\w+::\w+\([^)]*\)?$");
-            return regex.IsMatch(input);
-        }
-
-        static bool alreadyFoundDestructor = false;
-
-        static Function ParseDestructorString(string input)
-        {
-            if (alreadyFoundDestructor)
-                return null;
-
-            // Player::~Player()
-            var regex = new Regex(@"; (?<class>\w+)::~(?<classC>\w+)");
-            var match = regex.Match(input);
+        // Player::~Player()
+        Match match = ParseDestructorStringRegex.Match(input);
             
-            var className = match.Groups["class"].Value;
+        string className = match.Groups["class"].Value;
 
-            alreadyFoundDestructor = true;
+        _alreadyFoundDestructor = true;
 
-            return new Function(className, "~" + className, "");
-        }
+        return new(className, "~" + className, "");
+    }
 
 
-        static Function ParseString(string input, int index)
+    private static Function? ParseString(string input, int index)
+    {
+        if (input.Contains('~') && input.Contains("dq offset")) // Destructor
+            return ParseDestructorString(input);
+
+        if (input.Contains("___cxa_pure_virtual")) // Pure virtual function
+            return new("Class", "Function" + index, "");
+
+
+        return !IsValidFunc(input) ? // Not a valid function
+            null : ParseFunctionString(input);
+    }
+
+
+    private static string GuessReturnType(string name)
+    {
+        // Check if the function name starts with "is" or "has"
+        if (name.StartsWith("is") || name.StartsWith("has") || name.StartsWith("can"))
         {
-            if (input.Contains('~') && input.Contains("dq offset")) // Destructor
-                return ParseDestructorString(input);
-
-            if (input.Contains("___cxa_pure_virtual")) // Pure virtual function
-                return new Function("Class", "Function" + index, "");
-
-
-            if (!IsValidFunc(input)) // Not a valid function
-                return null;
-
-            return ParseFunctionString(input);
+            // If the function name starts with "is" or "has", it is likely to return a boolean value
+            return "virtual bool";
         }
-
-
-
-        static string GuessReturnType(string name)
-        {
-            // Check if the function name starts with "is" or "has"
-            if (name.StartsWith("is") || name.StartsWith("has") || name.StartsWith("can"))
-            {
-                // If the function name starts with "is" or "has", it is likely to return a boolean value
-                return "virtual bool";
-            }
             
-            // If the function name does not match any of the above patterns, it is likely to be a normal void
-            return "virtual int";
-        }
+        // If the function name does not match any of the above patterns, it is likely to be a normal void
+        return $"virtual {ReturnGuess}";
+    }
 
+    public static string? InputPath;
+    public static string? OutputPath;
+    public static string? MergePath;
+    public static string? ReturnGuess = "int";
+    public static bool IncludeIndices = true;
+    public static bool ThirtyTwoBit;
+    public static bool Verbose;
+    private const string HelpText =
+        @"
+Description:
+    Simple tool to convert IDA output to a proper vtable
 
-        static void Main(string[] args)
+Usage:
+    ida2vt [options]
+
+Options:
+    -i <path>     (Required) Path to the input file with the vtable from 
+    -o <path>     (Required) Path to the output file
+    -m <path>     Path to the old vtable file to merge with (Experimental - This may not work correctly/at all)
+    -r <type>     Default return type (default: int)
+    -c            Excludes comments with indices
+    -b            Specifies that the vtable is for a 32-bit binary, making hex indices multiples of 4 instead of 8 (default: false)
+    -v            Enables printing verbose output (floods the console) (default: false)
+";
+    private static void Main(string[] args)
+    {
+        for (int i = 0; i < args.Length; i++)
         {
-            Console.ForegroundColor = ConsoleColor.DarkCyan;
-
-            Console.WriteLine("Enter file path of IDA vTable");
-
-
-            // Read the input file
-
-            string[] lines;
-
-            try
+            if (i + 1 >= args.Length && args[i] is not "-c" and not "-b" and not "-v")
             {
-                lines = System.IO.File.ReadAllLines(Console.ReadLine());
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("The file could not be read:");
-                Console.WriteLine(e.Message);
-                Console.ReadLine();
+                Console.WriteLine(HelpText);
                 return;
             }
-            List<string> functionNames = new();
-            List<string> functionIndexes = new();
-            List<Function> functionList1 = new();
-
-
-
-            int index = -1; // -1 because of the typeinfo 
-
-            // Read all lines
-            foreach (string line in lines)
+            switch (args[i])
             {
-                bool shouldIncrementIndex = true;
-                // Parse the line
-                var function = ParseString(line, index);
+                case "-i":
+                    InputPath = args[++i];
+                    break;
+                case "-o":
+                    OutputPath = args[++i];
+                    break;
+                case "-m":
+                    MergePath = args[++i];
+                    break;
+                case "-r":
+                    ReturnGuess = args[++i];
+                    break;
+                case "-c":
+                    IncludeIndices = false;
+                    break;
+                case "-b":
+                    ThirtyTwoBit = true;
+                    break;
+                case "-v":
+                    Verbose = true;
+                    break;
+                default:
+                    Console.WriteLine(HelpText);
+                    return;
+            }
+        }
 
-                // Check if the line was a valid function
-                if (function == null)
-                    shouldIncrementIndex = false;
-                else
-                {
-                    // Guess the return type
-                    var returnType = GuessReturnType(function.Name);
+        if (InputPath == null || OutputPath == null)
+        {
+            Console.WriteLine(HelpText);
+            return;
+        }
 
-                    functionList1.Add(new Function("class", function.Name, function.Args, returnType));
-                    
-                }
+        // Read the input file
 
-                if (shouldIncrementIndex)
-                    index++;
+        string[] lines;
+
+        Console.WriteLine("Input path: " + InputPath);
+        Console.WriteLine("Output path: " + OutputPath);
+        Console.WriteLine("Merge path: " + MergePath);
+        Console.WriteLine("Return guess: " + ReturnGuess);
+        Console.WriteLine("Include indices: " + IncludeIndices);
+        Console.WriteLine("32-bit: " + ThirtyTwoBit);
+
+        try
+        {
+            lines = File.ReadAllLines(InputPath);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine(e.Message);
+            ConsoleColor oldColor = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Cyan;
+            Console.WriteLine("The input file could not be read, is the path invalid?");
+            Console.ForegroundColor = oldColor;
+            return;
+        }
+        List<string> functionNames = new();
+        List<string> functionIndexes = new();
+        List<Function?> functionList1 = new();
+
+
+
+        int index = -1; // -1 because of the typeinfo 
+
+        // Read all lines
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            // Parse the line
+            if (Verbose)
+                Console.WriteLine($"Parsing line {i} (index {index})");
+            Function? function = ParseString(line, index);
+
+            // Check if the line was a valid function
+            if (function == null)
+            {
+                Console.WriteLine($"Line {i} was not a valid function");
+                continue;
             }
 
+            // Guess the return type
+            string returnType = GuessReturnType(function.Name);
+            if (Verbose)
+                Console.WriteLine($"Name: {function.Name}, Args: {function.Args}, Return type: {returnType}");
+
+            functionList1.Add(new("class", function.Name, function.Args, returnType));
+
+            index++;
+        }
 
 
+        if (MergePath != null)
+        {
+            // interpret the vtable from the input file
 
-            Console.WriteLine("Would you like to merge with a pre-existing vtable? (Experimental - This may not work correctly/at all) y/n");
-
-            if (Console.ReadLine().ToLower().Contains("y"))
+            if (!File.Exists(MergePath))
             {
+                Console.WriteLine($"Merge file {MergePath} does not exist");
+                return;
+            }
 
-                Console.WriteLine("Input path to old table");
+            Console.WriteLine("Attempting to merge with " + MergePath);
+            string[] oldVtableStr = File.ReadAllLines(MergePath);
 
-                string oldVtablePath = Console.ReadLine();
+            List<Function?> oldVTableFunctions = new();
 
-                // interepret the vtable from the input file
-
-                if (!File.Exists(oldVtablePath))
+            foreach (string line in oldVtableStr)
+            {
+                if (Verbose)
+                    Console.WriteLine("Parsing line: " + line + " of old vtable");
+                oldVTableFunctions.Add(ConvertToFunction(line));
+            }
+            Console.WriteLine("Finished parsing old vtable, attempting to merge");
+            foreach (Function? newFunc in functionList1)
+            {
+                if (Verbose)
+                    Console.WriteLine($"Comparing {newFunc?.Name} to old vtable");
+                if (newFunc == null)
                 {
-                    Console.WriteLine("File does not exist");
-                    Console.ReadLine();
-                    return;
+                    Console.WriteLine("Skipping null function in new vtable");
+                    continue;
                 }
-
-                string[] oldVtableStr = File.ReadAllLines(oldVtablePath);
-
-                List<Function> oldvTableFunctions = new();
-
-                foreach (string line in oldVtableStr)
+                foreach (Function? oldFunc in oldVTableFunctions)
                 {
-                    oldvTableFunctions.Add(ConvertToFunction(line));
-                }
-
-                foreach (Function newFunc in functionList1)
-                {
-                    foreach (Function oldFunc in oldvTableFunctions)
+                    if (oldFunc == null || newFunc.wasChanged || oldFunc.wasChanged)
                     {
-                        if (newFunc == null || oldFunc == null || newFunc.wasChanged || oldFunc.wasChanged)
-                            continue;
-
-                        if (newFunc.Name == oldFunc.Name)
+                        Console.WriteLine("Skipping a function in the old vtable because:");
+                        if (oldFunc == null)
+                            Console.WriteLine("It is null");
+                        if (oldFunc?.wasChanged ?? false)
+                            Console.WriteLine("The old vtable function was already changed");
+                        if (newFunc.wasChanged)
                         {
-                            if (newFunc.Args != oldFunc.Args)
-                                newFunc.Args = oldFunc.Args;
-
-                            if (newFunc.ReturnType != oldFunc.ReturnType)
-                                newFunc.ReturnType = oldFunc.ReturnType;
-
-
-                            newFunc.wasChanged = true;
-                            oldFunc.wasChanged = true;
-
-                            continue;
+                            Console.WriteLine("The new vtable function was already changed");
+                            break;
                         }
 
-                        
+                        continue;
                     }
+
+                    if (newFunc.Name != oldFunc.Name) continue;
+                    
+                    if (newFunc.Args != oldFunc.Args)
+                    {
+                        Console.WriteLine($"Changing args of {newFunc.Name} from {newFunc.Args} to {oldFunc.Args}");
+                        newFunc.Args = oldFunc.Args;
+                    }
+
+                    if (newFunc.ReturnType != oldFunc.ReturnType)
+                    {
+                        Console.WriteLine($"Changing return type of {newFunc.Name} from {newFunc.ReturnType} to {oldFunc.ReturnType}");
+                        newFunc.ReturnType = oldFunc.ReturnType;
+                    }
+
+
+                    newFunc.wasChanged = true;
+                    oldFunc.wasChanged = true;
                 }
             }
-
-            int newIndex = 1;
-
-            Function lastFunction = null;
-
-            foreach (Function func in functionList1)
-            {
-
-                functionNames.Add($"{func.ReturnType} {func.Name}({func.Args});");
-                
-                if (lastFunction != null && lastFunction.Name != func.Name && !func.Name.Contains("~"))
-                    functionIndexes.Add($"void {func.Name} = {newIndex};");
-
-
-                if (!func.Name.Contains("~"))
-                    newIndex++;
-
-                lastFunction = func;
-            }
-
-
-
-            Console.WriteLine("Enter file name");
-            string path = Environment.CurrentDirectory + @"\" + Console.ReadLine();
-            System.IO.File.WriteAllLines(path + "_vtables.txt", functionNames);
-            System.IO.File.WriteAllLines(path + "_indexs.txt", functionIndexes);
-
-            Console.WriteLine("Saved");
-            Console.ReadKey();
         }
+
+        int newIndex = 0;
+
+        string lastFunctionName = "";
+        Console.WriteLine("Converting to strings");
+        foreach (Function? func in functionList1)
+        {
+            functionNames.Add($"{func?.ReturnType} {func?.Name}({func?.Args});{(IncludeIndices ? $" // {newIndex} (0x{newIndex * (ThirtyTwoBit ? 4 : 8):X})" : string.Empty)}");
+            
+            if (lastFunctionName != func?.Name && !func!.Name.Contains('~'))
+                functionIndexes.Add($"void {func.Name} = {newIndex};{(IncludeIndices ? $" // 0x{newIndex * (ThirtyTwoBit ? 4 : 8):X}" : string.Empty)}");
+
+
+            if (!func.Name.Contains('~'))
+                newIndex++;
+
+            lastFunctionName = func.Name;
+        }
+
+        File.WriteAllLines(OutputPath + "_vtables.txt", functionNames);
+        File.WriteAllLines(OutputPath + "_indices.txt", functionIndexes);
+
+        Console.WriteLine("Saved");
     }
 }
