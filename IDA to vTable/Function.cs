@@ -8,7 +8,7 @@ internal class Function
         Class = _class;
         Name = _name;
         Args = _args;
-        ReturnType = "virtual int";
+        ReturnType = "virtual void";
     }
 
     public Function(string _class, string _name, string _args, string _return)

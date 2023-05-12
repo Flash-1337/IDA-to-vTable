@@ -105,7 +105,7 @@ Options:
     -i <path>     (Required) Path to the input file with the vtable from 
     -o <path>     (Required) Path to the output file
     -m <path>     Path to the old vtable file to merge with (Experimental - This may not work correctly/at all)
-    -r <type>     Default return type (default: int)
+    -r <type>     Default return type (default: void)
     -c            Excludes comments with indices
     -b            Specifies that the vtable is for a 32-bit binary, making hex indices multiples of 4 instead of 8 (default: false)
     -v            Enables printing verbose output (floods the console) (default: false)
