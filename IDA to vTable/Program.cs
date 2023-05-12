@@ -90,7 +90,7 @@ internal static class Program
     public static string? OutputPath;
     public static string? MergePath;
     public static string? ReturnGuess = "int";
-    public static bool IncludeIndices = true;
+    public static bool IncludeIndexes = true;
     public static bool ThirtyTwoBit;
     public static bool Verbose;
     private const string HelpText =
@@ -106,8 +106,8 @@ Options:
     -o <path>     (Required) Path to the output file
     -m <path>     Path to the old vtable file to merge with (Experimental - This may not work correctly/at all)
     -r <type>     Default return type (default: void)
-    -c            Excludes comments with indices
-    -b            Specifies that the vtable is for a 32-bit binary, making hex indices multiples of 4 instead of 8 (default: false)
+    -c            Excludes comments with indexes
+    -b            Specifies that the vtable is for a 32-bit binary, making hex indexes multiples of 4 instead of 8 (default: false)
     -v            Enables printing verbose output (floods the console) (default: false)
 ";
     private static void Main(string[] args)
@@ -134,7 +134,7 @@ Options:
                     ReturnGuess = args[++i];
                     break;
                 case "-c":
-                    IncludeIndices = false;
+                    IncludeIndexes = false;
                     break;
                 case "-b":
                     ThirtyTwoBit = true;
@@ -162,7 +162,7 @@ Options:
         Console.WriteLine("Output path: " + OutputPath);
         Console.WriteLine("Merge path: " + MergePath);
         Console.WriteLine("Return guess: " + ReturnGuess);
-        Console.WriteLine("Include indices: " + IncludeIndices);
+        Console.WriteLine("Include indexes: " + IncludeIndexes);
         Console.WriteLine("32-bit: " + ThirtyTwoBit);
 
         try
@@ -289,10 +289,10 @@ Options:
         Console.WriteLine("Converting to strings");
         foreach (Function? func in functionList1)
         {
-            functionNames.Add($"{func?.ReturnType} {func?.Name}({func?.Args});{(IncludeIndices ? $" // {newIndex} (0x{newIndex * (ThirtyTwoBit ? 4 : 8):X})" : string.Empty)}");
+            functionNames.Add($"{func?.ReturnType} {func?.Name}({func?.Args});{(IncludeIndexes ? $" // {newIndex} (0x{newIndex * (ThirtyTwoBit ? 4 : 8):X})" : string.Empty)}");
             
             if (lastFunctionName != func?.Name && !func!.Name.Contains('~'))
-                functionIndexes.Add($"void {func.Name} = {newIndex};{(IncludeIndices ? $" // 0x{newIndex * (ThirtyTwoBit ? 4 : 8):X}" : string.Empty)}");
+                functionIndexes.Add($"void {func.Name} = {newIndex};{(IncludeIndexes ? $" // 0x{newIndex * (ThirtyTwoBit ? 4 : 8):X}" : string.Empty)}");
 
 
             if (!func.Name.Contains('~'))
@@ -302,7 +302,7 @@ Options:
         }
 
         File.WriteAllLines(OutputPath + "_vtables.txt", functionNames);
-        File.WriteAllLines(OutputPath + "_indices.txt", functionIndexes);
+        File.WriteAllLines(OutputPath + "_indexes.txt", functionIndexes);
 
         Console.WriteLine("Saved");
     }

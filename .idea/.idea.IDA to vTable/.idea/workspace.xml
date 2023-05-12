@@ -4,15 +4,13 @@
     <projectFile>IDA to vTable/IDA to vTable.csproj</projectFile>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="b69f59ef-aee5-4601-9d78-e1245e273dc2" name="Changes" comment="" />
+    <list default="true" id="b69f59ef-aee5-4601-9d78-e1245e273dc2" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/.idea.IDA to vTable/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.IDA to vTable/.idea/workspace.xml" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
-  </component>
-  <component name="HighlightingSettingsPerFile">
-    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/SourcesCache/213c4022a1c71e8e20f4b5369a75b4213a8fca817449f2e45753d4eb13fcf3cb/Path.cs" root0="SKIP_HIGHLIGHTING" />
-    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/SourcesCache/d856066ffe4c59543feec5c19d3d3c8934b5eec93f8cf1358aedcb555825/Boolean.cs" root0="SKIP_HIGHLIGHTING" />
   </component>
   <component name="MarkdownSettingsMigration">
     <option name="stateVersion" value="1" />
@@ -34,9 +32,9 @@
   },
   "keyToStringList": {
     "rider.external.source.directories": [
-      "C:\\Users\\me\\AppData\\Roaming\\JetBrains\\Rider2022.3\\resharper-host\\DecompilerCache",
-      "C:\\Users\\me\\AppData\\Roaming\\JetBrains\\Rider2022.3\\resharper-host\\SourcesCache",
-      "C:\\Users\\me\\AppData\\Local\\Symbols\\src"
+      "C:\\Users\\Me_Laptop\\AppData\\Roaming\\JetBrains\\Rider2022.3\\resharper-host\\DecompilerCache",
+      "C:\\Users\\Me_Laptop\\AppData\\Roaming\\JetBrains\\Rider2022.3\\resharper-host\\SourcesCache",
+      "C:\\Users\\Me_Laptop\\AppData\\Local\\Symbols\\src"
     ]
   }
 }]]></component>
@@ -69,6 +67,7 @@
       <option name="presentableId" value="Default" />
       <updated>1683588557810</updated>
       <workItem from="1683588560098" duration="24995000" />
+      <workItem from="1683900443014" duration="1186000" />
     </task>
     <servers />
   </component>
