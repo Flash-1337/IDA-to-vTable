@@ -1,4 +1,4 @@
-﻿namespace IDA_to_vTable;
+namespace IDA_to_vTable;
 
 
 internal class Function

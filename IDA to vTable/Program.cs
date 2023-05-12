@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using static System.Boolean;
 
 namespace IDA_to_vTable;
